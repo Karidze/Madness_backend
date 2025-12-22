@@ -6,3 +6,4 @@ aiogram
 python-dotenv
 redis
 pydantic==2.12.5
+pydantic-settings
