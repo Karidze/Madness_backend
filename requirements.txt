@@ -7,4 +7,3 @@ python-dotenv
 redis
 pydantic==2.12.5
 pydantic-settings
-psycopg2-binary
