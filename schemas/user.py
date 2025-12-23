@@ -23,8 +23,8 @@ class UserOut(BaseModel):
     username: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
-    is_active: bool
-    is_banned: bool
+    is_active: Optional[bool]
+    is_banned: Optional[bool]
 
     class Config:
         # Позволяет создавать эту схему напрямую из SQLAlchemy-модели (ORM-объекта).

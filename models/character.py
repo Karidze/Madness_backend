@@ -1,3 +1,5 @@
+#/backend/models/character.py
+
 from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, String, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship

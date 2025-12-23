@@ -1,3 +1,5 @@
+#/backend/models/user.py
+
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.sql import func
 from db.database import Base
