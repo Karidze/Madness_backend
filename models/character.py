@@ -1,4 +1,4 @@
-#/backend/models/character.py
+#/models/character.py
 
 from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, String, JSON
 from sqlalchemy.sql import func
@@ -10,6 +10,12 @@ class Character(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    username = Column(String, nullable=False)
+
+    # новые поля
+    gender = Column(String, nullable=False)  # "male" или "female"
+    avatar_full = Column(String, nullable=True)  # ссылка на картинку во весь рост
+    avatar_card = Column(String, nullable=True)  # ссылка на картинку для карточки
 
     level = Column(Integer, default=1)
     xp = Column(Integer, default=0)
@@ -29,18 +35,15 @@ class Character(Base):
     medkit_count = Column(Integer, default=3)
     energy_drink_count = Column(Integer, default=3)
 
-    # JSON‑поле для хранения списка купленных предметов
     purchased_items = Column(JSON, nullable=True)
 
     lifesteal = Column(Float, default=0.0)
     regen = Column(Float, default=0.0)
 
     stat_points_unspent = Column(Integer, default=0)
-
     battle_state = Column(String, default="idle")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # связь с User
-    user = relationship("User", backref="character", uselist=False)
+    user = relationship("User", back_populates="character", uselist=False)

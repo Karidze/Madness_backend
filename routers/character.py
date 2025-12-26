@@ -1,3 +1,5 @@
+#/backend/routers/character
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,11 +11,18 @@ router = APIRouter(prefix="/characters", tags=["characters"])
 
 @router.post("/", response_model=CharacterOut)
 async def create_character(payload: CharacterCreate, db: AsyncSession = Depends(get_db)):
-    character = Character(user_id=payload.user_id)
+    character = Character(
+        user_id=payload.user_id,
+        gender=payload.gender,
+        username=payload.username,
+        avatar_full=payload.avatar_full,
+        avatar_card=payload.avatar_card
+    )
     db.add(character)
     await db.commit()
     await db.refresh(character)
     return character
+
 
 @router.get("/", response_model=list[CharacterOut])
 async def list_characters(db: AsyncSession = Depends(get_db)):
@@ -24,6 +33,15 @@ async def list_characters(db: AsyncSession = Depends(get_db)):
 @router.get("/{character_id}", response_model=CharacterOut)
 async def get_character(character_id: int, db: AsyncSession = Depends(get_db)):
     character = await db.get(Character, character_id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return character
+
+
+@router.get("/by_user/{user_id}", response_model=CharacterOut)
+async def get_character_by_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Character).where(Character.user_id == user_id))
+    character = result.scalar_one_or_none()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
