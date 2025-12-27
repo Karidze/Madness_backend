@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
-from routers import user, character
+from routers import user, character, auth
 
 app = FastAPI(
     title="Madness",
@@ -22,6 +22,7 @@ app.add_middleware(
 
 app.include_router(user.router, prefix=settings.API_PREFIX)
 app.include_router(character.router, prefix=settings.API_PREFIX)
+app.include_router(auth.router, prefix=settings.API_PREFIX)
 
 if __name__ == "__main__":
     import uvicorn

@@ -15,7 +15,7 @@ router = Router()
 dp.include_router(router)
 
 # локальный backend во время разработки
-BACKEND_URL = "http://127.0.0.1:8000/api"  # если settings.API_PREFIX = "/api"
+BACKEND_URL = "http://madnessbackend-production.up.railway.app/api"  # если settings.API_PREFIX = "/api"
 
 @router.message(F.text == "/start")
 async def start(message: types.Message):

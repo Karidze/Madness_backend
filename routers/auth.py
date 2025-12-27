@@ -1,97 +1,77 @@
-# backend/routers/auth.py
+import logging
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from urllib.parse import parse_qsl
-import hmac
-import hashlib
-import json
-import time
+from aiogram.utils.web_app import safe_parse_webapp_init_data
+from aiogram.utils.token import TokenValidationError
 
 from core.config import settings
 from db.database import get_db
 from models.user import User
-from services.user_service import get_or_create_user   # <-- используем сервис
+from services.user_service import get_or_create_user
+
+# Настройка логирования, чтобы видеть ошибки в консоли бэкенда
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
 
 class TelegramAuthIn(BaseModel):
     initData: str
 
-
-def verify_init_data(init_data: str, bot_token: str) -> dict:
-    """
-    Валидирует initData от Telegram, возвращает params как dict, если всё ок.
-    """
-    params = dict(parse_qsl(init_data, keep_blank_values=True))
-
-    received_hash = params.get("hash")
-    if not received_hash:
-        raise HTTPException(status_code=400, detail="Missing hash in initData")
-
-    data_check_string = "\n".join(
-        f"{k}={v}" for k, v in sorted(params.items()) if k != "hash"
-    )
-
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
-    calculated_hash = hmac.new(
-        secret_key, data_check_string.encode(), hashlib.sha256
-    ).hexdigest()
-
-    if calculated_hash != received_hash:
-        raise HTTPException(status_code=403, detail="Invalid Telegram initData signature")
-
-    # Проверка свежести
-    try:
-        auth_date = int(params.get("auth_date", "0"))
-    except ValueError:
-        auth_date = 0
-    if auth_date and (time.time() - auth_date) > 3600:
-        raise HTTPException(status_code=403, detail="Auth data expired")
-
-    return params
-
-
 def create_jwt_for_user(user: User) -> str:
-    """
-    Заглушка для JWT. В проде используй PyJWT/JOSE.
-    """
+    # Ваша логика создания токена
     return f"TEST_TOKEN_USER_{user.id}"
-
 
 @router.post("/telegram")
 async def auth_telegram(payload: TelegramAuthIn, db: AsyncSession = Depends(get_db)):
-    # 1) Проверяем подпись initData
-    params = verify_init_data(payload.initData, settings.BOT_TOKEN)
-
-    # 2) Достаём объект user из initData
-    if "user" not in params:
-        raise HTTPException(status_code=400, detail="Missing user in initData")
+    # 1. Отладка входящих данных
+    logger.info("--- New Auth Attempt ---")
+    logger.info(f"Received initData: {payload.initData[:50]}...") # Печатаем начало для проверки
+    logger.info(f"Using BOT_TOKEN: {settings.BOT_TOKEN[:5]}...***") # Проверяем, что токен не пустой
 
     try:
-        user_obj = json.loads(params["user"])
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid user JSON in initData")
+        # 2. Валидация данных с использованием ИМЕНОВАННЫХ аргументов
+        # В aiogram 3.x порядок: (token, init_data) или именованные
+        params = safe_parse_webapp_init_data(
+            token=settings.BOT_TOKEN,
+            init_data=payload.initData
+        )
+        logger.info("Validation successful!")
 
-    telegram_id = user_obj.get("id")
-    username = user_obj.get("username") or "Unknown"
+    except TokenValidationError:
+        logger.error("Validation error: Invalid BOT_TOKEN format")
+        raise HTTPException(status_code=403, detail="Invalid Bot Token format")
+    except ValueError as e:
+        # Чаще всего падает здесь, если hash не совпадает
+        logger.error(f"Validation error (Hash mismatch): {e}")
+        raise HTTPException(status_code=403, detail=f"Hash mismatch or data expired: {e}")
+    except Exception as e:
+        logger.error(f"Unknown validation error: {e}")
+        raise HTTPException(status_code=403, detail=f"Unexpected error: {e}")
 
-    if not isinstance(telegram_id, int):
-        raise HTTPException(status_code=400, detail="Invalid user id in initData")
+    # 3. Извлечение данных пользователя
+    user_obj = params.user
+    if not user_obj or not user_obj.id:
+        logger.warning("User data missing in initData")
+        raise HTTPException(status_code=400, detail="Missing user in initData")
 
-    # 3) Ищем/создаём юзера через сервис
-    user = await get_or_create_user(db, telegram_id, username)
+    telegram_id = user_obj.id
+    username = user_obj.username or "Unknown"
 
-    # 4) Выдаём токен
-    token = create_jwt_for_user(user)
+    try:
+        # 4. Сохранение/получение пользователя в БД
+        user = await get_or_create_user(db, telegram_id, username)
+        token = create_jwt_for_user(user)
 
-    # 5) Возвращаем фронту
-    return {
-        "token": token,
-        "user": {
-            "id": user.id,
-            "telegram_id": user.telegram_id,
-            "username": user.username,
-        },
-    }
+        return {
+            "token": token,
+            "user": {
+                "id": user.id,
+                "telegram_id": user.telegram_id,
+                "username": user.username,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during user creation")
